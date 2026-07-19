@@ -189,8 +189,8 @@ const terminateLease = async (req: Request, res: Response, next: NextFunction) =
         if ( isNaN(leaseId)) return res.status(400).json({error: "invalid lease id"});
 
         const lease = await TenantModel.terminateEarlyLease(leaseId);
-        if (!lease) return res.json({message: "no lease found given id"}); 
-        return res.status(200).json({message: "llease successfully terminated"});
+        if (!lease) return res.status(404).json({message: "no lease found given id"}); 
+        return res.status(200).json({message: "lease successfully terminated"});
     } catch (err) {
         next(err);
     }
@@ -202,7 +202,7 @@ const markAsBreached = async (req: Request, res: Response, next: NextFunction) =
         if ( isNaN(leaseId)) return res.status(400).json({error:"invalid lease id"});
 
         const lease = await TenantModel.markLeaseAsBreached(leaseId);
-        if (!lease) return res.json({message: " no lease found having the id provided"});
+        if (!lease) return res.status(404).json({message: " no lease found having the id provided"});
         
         return res.status(200).json({
             message: "successfully marked lease as breached", 
@@ -222,7 +222,7 @@ const markAsCancelled = async (req: Request, res: Response, next: NextFunction) 
         if (isNaN(leaseId)) return res.status(400).json({error: "invalid lease id"});
 
         const lease = await TenantModel.cancelPendingLease(leaseId);
-        if (!lease) return res.json({message: "no lease found having the id"});
+        if (!lease) return res.status(404).json({message: "no lease found having the id"});
         
         return res.status(200).json({
             message: "successfully marked the lease cancelled", 
@@ -246,6 +246,7 @@ const renewLease = async (req: Request, res: Response, next: NextFunction) => {
 
         const { tenantId, roomId, leaseAmount, leaseEnd, newLeaseEnd, leaseStatus } = req.body;
         const lease = await TenantModel.createRenewalLease({
+            lease_id: leaseId,
             tenant_id: tenantId, 
             room_id: roomId, 
             amount: leaseAmount, 
@@ -297,48 +298,7 @@ const getTenantLeaseHistory = async (req: Request, res: Response, next: NextFunc
     }
 };
 
-const getAvailableRooms = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const price = req.query.max_price ? parseFloat(req.query.max_price as string) : undefined;
-        if (price !== undefined && isNaN(price)) return res.status(400).json({error: "invalid format for max price"});
-        
-        const rooms = (price !== undefined) 
-            ? await TenantModel.fetchAvailableRoomsByPrice(price) 
-            : await TenantModel.fetchAvailableRoomsFromDB();
-    
-        if (rooms.length === 0) return res.status(200).json({message: "No available rooms match", data: [] });
 
-        const formatted = rooms.map((r: any) => ({
-            roomId: r.room_id,
-            roomNumber: r.room_number,
-            price: r.price,
-            propertyId: r.property_id
-        }));
-
-        return res.status(200).json({message: "Successfully retrieved available rooms", data: formatted});
-    } catch (err) {
-        next(err);
-    }
-};
-
-const getOccupiedRooms = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const rooms = await TenantModel.fetchOccupiedRoomsFromDB();
-        if (rooms.length === 0) return res.status(200).json({message: "There are no occupied rooms"});
-
-        const formatted = rooms.map((r: any) => ({
-            roomId: r.room_id,
-            roomNumber: r.room_number,
-            tenantName: r.tenant_name,
-            leaseId: r.lease_id,
-            leaseEnd: r.lease_end
-        }));
-
-        return res.status(200).json({message: "Successfully fetched all occupied rooms", data: formatted});
-    } catch (err) {
-        next(err);
-    }
-};
 
 const transferRoom = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -372,24 +332,20 @@ const transferRoom = async (req: Request, res: Response, next: NextFunction) => 
     }
 };
 
+
 export { 
         getAllTenant, 
         createTenant, 
         updateTenant, 
         deleteTenant, 
-        getTenant 
-}; 
-export { 
+        getTenant,
         createLease, 
         getOverdueLease, 
         terminateLease, 
         markAsBreached, 
         markAsCancelled, 
         renewLease, 
-        getTenantLeaseHistory };
-export {
-        getAvailableRooms, 
-        getOccupiedRooms, 
+        getTenantLeaseHistory,
         transferRoom 
 };
 

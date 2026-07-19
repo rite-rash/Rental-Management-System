@@ -1,6 +1,7 @@
 import pool from "../config/db";
 
 interface RenewalData {
+    lease_id: number;
     tenant_id: number;
     room_id: number;
     amount: number;
@@ -325,26 +326,7 @@ export class TenantModel {
         return result.rows[0];
     }
 
-    static fetchAvailableRoomsFromDB = async () => {
-        const result = await pool.query(`
-            SELECT r.* FROM rooms r
-            LEFT JOIN leases l ON l.room_id = r.room_id 
-            AND l.lease_status = 'active' AND CURRENT_DATE BETWEEN l.lease_start and l.lease_end
-            WHERE l.lease_id IS NULL;
-        `);
-        return result.rows;
-    }
 
-    static fetchOccupiedRoomsFromDB = async () => {
-        const result = await pool.query(`
-            SELECT r.*, t.tenant_name, l.lease_id, l.lease_end
-            FROM rooms r
-            JOIN leases l ON r.room_id = l.room_id AND l.lease_status = 'active'
-            JOIN tenants t ON l.tenant_id = t.tenant_id
-            WHERE CURRENT_DATE BETWEEN l.lease_start AND l.lease_end;
-        `);
-        return result.rows;
-    }
 
     static transferTenantRoom = async (data: TransferRoomData) => {
         const client = await pool.connect();
@@ -380,20 +362,5 @@ export class TenantModel {
         } finally {
             client.release();
         }
-    }
-
-    static fetchAvailableRoomsByPrice = async (price: number) => {
-        const result = await pool.query(
-            `
-                SELECT r.* FROM rooms r
-                LEFT JOIN leases l ON l.room_id = r.room_id
-                    AND l.lease_status = 'active' 
-                    AND CURRENT_DATE BETWEEN l.lease_start AND l.lease_end
-                WHERE l.lease_id IS NULL 
-                    AND r.price <= $1;
-            `,
-            [price]
-        );
-        return result.rows;
     }
 }
