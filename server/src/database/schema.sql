@@ -1,5 +1,7 @@
 DROP TABLE IF EXISTS utility_bills CASCADE;
 DROP TABLE IF EXISTS payments CASCADE;
+DROP TABLE IF EXISTS invoices CASCADE;
+
 DROP TABLE IF EXISTS leases CASCADE;
 DROP TABLE IF EXISTS rooms CASCADE;
 DROP TABLE IF EXISTS properties CASCADE;
@@ -13,12 +15,13 @@ DROP TABLE IF EXISTS property_documents CASCADE;
 
 DROP TYPE IF EXISTS room_type_options CASCADE;
 DROP TYPE IF EXISTS lease_status_options CASCADE;
+DROP TYPE IF EXISTS invoice_status_options CASCADE;
 DROP TYPE IF EXISTS payment_status_options CASCADE;
 DROP TYPE IF EXISTS contact_number_provider_options CASCADE;
 
 CREATE TYPE room_type_options AS ENUM ('Studio', '1-bedroom');
 CREATE TYPE lease_status_options AS ENUM('pending', 'active', 'terminated', 'complete', 'cancelled', 'breached');
-CREATE TYPE payment_status_options AS ENUM('unpaid', 'paid', 'overdue');
+CREATE TYPE invoice_status_options AS ENUM('unpaid', 'partially_paid', 'paid', 'overdue');
 CREATE TYPE contact_number_provider_options AS ENUM('not specified','smart', 'globe', 'TNT', 'sun', 'DITO', 'GOMO');
 
 
@@ -86,7 +89,7 @@ CREATE TABLE property_bills (
     bill_name VARCHAR(100) NOT NULL,
     amount_due NUMERIC(10, 2) NOT NULL,
     due_date DATE NOT NULL,
-    paid_at DATE NOT NULL
+    paid_at DATE,
     is_paid BOOLEAN not null DEFAULT FALSE,
     receipt_url TEXT,
     CONSTRAINT check_bill_amount CHECK (amount_due >= 0),
@@ -124,27 +127,46 @@ CREATE TABLE leases (
     CONSTRAINT check_lease_dates CHECK (lease_end > lease_start)
 );
 
-CREATE TABLE payments (
-    payment_id SERIAL PRIMARY KEY,
+CREATE TABLE invoices (
+    invoice_id SERIAL PRIMARY KEY,
     lease_id INT NOT NULL,
-    amount_due NUMERIC(10,2),
-    amount_paid NUMERIC(10,2) DEFAULT 0.00,
+    base_rent NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    total_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     custom_penalty NUMERIC(10, 2) DEFAULT 0.00,
-    LANDLORD_NOTES text,
+    landlord_notes text,
     due_date DATE NOT NULL,
-    paid_at TIMESTAMP,
-    payment_status payment_status_options NOT NULL DEFAULT 'unpaid',
-    CONSTRAINT fk_payment_lease FOREIGN KEY (lease_id) 
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    invoice_status invoice_status_options NOT NULL DEFAULT 'unpaid',
+    CONSTRAINT fk_invoice_lease FOREIGN KEY (lease_id) 
         REFERENCES leases(lease_id) ON DELETE CASCADE
 );
 
 
+
+CREATE TABLE payments (
+    payment_id SERIAL PRIMARY KEY,
+    invoice_id INT NOT NULL,
+    amount_paid NUMERIC(10,2) NOT NULL,
+    payment_method VARCHAR(100) NOT NULL DEFAULT 'cash',
+    reference_number VARCHAR(100), 
+    paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT check_amount_paid CHECK (amount_paid > 0),
+    CONSTRAINT fk_payment_invoice FOREIGN KEY (invoice_id)
+        REFERENCES invoices(invoice_id) ON DELETE CASCADE
+
+);
+
+
+
 CREATE TABLE utility_bills (
     utility_bills_id SERIAL PRIMARY KEY,
-    payment_id INT NOT NULL,
+    invoice_id INT NOT NULL,
+
     previous_kwh NUMERIC(10, 2) DEFAULT 0.00,
     current_kwh NUMERIC(10,2) DEFAULT 0.00,
     kwh_rate NUMERIC(10, 2) DEFAULT 0.00 NOT NULL,
+    electric_total NUMERIC(10, 2) DEFAULT 0.00 NOT NULL,
 
     water_consumption_cubic_meters NUMERIC(10,2) DEFAULT 0.00,
     water_rate_per_excess_cubic NUMERIC(10,2) NOT NULL DEFAULT 20.00,
@@ -154,6 +176,11 @@ CREATE TABLE utility_bills (
 
     misc_utility_fee NUMERIC(10,2) NOT NULL DEFAULT 75.00,
 
-    CONSTRAINT fk_utility_payment FOREIGN KEY (payment_id) 
-        REFERENCES payments(payment_id) ON DELETE CASCADE
+    total_utility_amount NUMERIC(10,2) NOT NULL,
+
+    CONSTRAINT fk_utility_invoice FOREIGN KEY (invoice_id) 
+        REFERENCES invoices(invoice_id) ON DELETE CASCADE
 );
+
+
+
